@@ -10,7 +10,14 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  solvedProblems: [String]
+  solvedProblems: [{
+    problem: String,  // Problem slug/name
+    submissionId: String,  // Latest submission ID
+    status: {
+      type: String,
+      default: "Accepted"  // Default value, typically all solved problems are "Accepted"
+    }
+  }]
 });
 
 const User = mongoose.model('User', userSchema);
