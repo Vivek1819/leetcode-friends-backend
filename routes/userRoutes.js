@@ -46,7 +46,6 @@ router.get("/:username/solved/:slug", async (req, res) => {
 
 router.post("/:username/add-friend", async (req, res) => {
   try {
-    // Log incoming data
     console.log('=== ADD FRIEND ENDPOINT ===');
     console.log('Username:', req.params.username);
     console.log('Friend username from request:', req.body.friendUsername);
@@ -93,13 +92,13 @@ router.get("/:username/friends", async (req, res) => {
 router.post("/:username/submissions", async (req, res) => {
   try {
     const { username } = req.params;
-    const { submissions } = req.body;
+    const { submissions, latestSubmissionId } = req.body; 
 
-    // Log incoming data for debugging
     console.log("=== SUBMISSIONS ENDPOINT ===");
     console.log("Username:", username);
     console.log("Request body:", JSON.stringify(req.body, null, 2));
     console.log("Submissions count:", submissions?.length || 0);
+    console.log("Latest Submission ID:", latestSubmissionId || "None"); 
 
     // Find user or create if doesn't exist
     let user = await User.findOne({ username });
@@ -107,10 +106,11 @@ router.post("/:username/submissions", async (req, res) => {
       user = new User({ username, solvedProblems: [] });
     }
 
-    // Process all submissions, not just accepted ones
-    // We'll use all submissions but prioritize accepted ones when there are duplicates
-    
-    // First, group submissions by problem slug
+    if (latestSubmissionId) {
+      user.lastScrapedSubmissionId = latestSubmissionId;
+      console.log(`Updated checkpoint for ${username} to ${latestSubmissionId}`);
+    }
+
     const submissionsByProblem = submissions.reduce((acc, sub) => {
       if (!acc[sub.problemSlug]) {
         acc[sub.problemSlug] = [];
@@ -118,20 +118,16 @@ router.post("/:username/submissions", async (req, res) => {
       acc[sub.problemSlug].push(sub);
       return acc;
     }, {});
-    
-    // For each problem, prioritize accepted submissions
+  
     const processedSubmissions = Object.values(submissionsByProblem).map(subs => {
-      // Find an accepted submission if it exists
       const accepted = subs.find(s => s.status === "Accepted");
-      return accepted || subs[0]; // Return accepted or the first submission
+      return accepted || subs[0]; 
     });
     
-    // Track the accepted submissions separately for logging
     const acceptedSubmissions = processedSubmissions.filter(
       (sub) => sub.status === "Accepted"
     );
 
-    // Log submissions
     console.log("Total processed submissions:", processedSubmissions.length);
     console.log("Accepted submissions:", acceptedSubmissions.length);
     console.log(
@@ -141,16 +137,14 @@ router.post("/:username/submissions", async (req, res) => {
         : "None"
     );
 
-    // Create a map of current problems for easy lookup
     const currentProblemsMap = {};
     user.solvedProblems.forEach((sp) => {
       currentProblemsMap[sp.problem] = {
         submissionId: sp.submissionId,
-        status: sp.status || "Accepted" // Handle existing records that might not have status
+        status: sp.status || "Accepted" 
       };
     });
 
-    // Process each submission - either add new problems or update existing ones
     const newSolvedProblems = [];
     
     processedSubmissions.forEach((sub) => {
@@ -162,10 +156,8 @@ router.post("/:username/submissions", async (req, res) => {
       };
       
       if (currentProblemsMap[problemSlug]) {
-        // Problem exists - update if this is an accepted submission and current is not
         const currentStatus = currentProblemsMap[problemSlug].status;
         if (sub.status === "Accepted" && currentStatus !== "Accepted") {
-          // We'll update this problem's status
           const index = user.solvedProblems.findIndex(p => p.problem === problemSlug);
           if (index !== -1) {
             user.solvedProblems[index].status = "Accepted";
@@ -173,19 +165,16 @@ router.post("/:username/submissions", async (req, res) => {
           }
         }
       } else {
-        // New problem - add it
         newSolvedProblems.push(newProblem);
       }
     });
 
-    // Log new problems being added
     console.log("New problems to be added:", newSolvedProblems.length);
     if (newSolvedProblems.length > 0) {
       console.log("Sample new problem:", JSON.stringify(newSolvedProblems[0], null, 2));
       user.solvedProblems = [...user.solvedProblems, ...newSolvedProblems];
       await user.save();
     } else if (user.isModified()) {
-      // Save if we've made updates to existing problems
       await user.save();
     }
 
@@ -197,6 +186,26 @@ router.post("/:username/submissions", async (req, res) => {
   } catch (error) {
     console.error("Error processing submissions:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+
+router.get('/:username/checkpoint', async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    const user = await User.findOne({ username });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    return res.status(200).json({ 
+      lastScrapedSubmissionId: user.lastScrapedSubmissionId || null 
+    });
+  } catch (error) {
+    console.error('Error retrieving checkpoint:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

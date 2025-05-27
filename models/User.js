@@ -17,7 +17,8 @@ const userSchema = new mongoose.Schema({
       type: String,
       default: "Accepted"  // Default value, typically all solved problems are "Accepted"
     }
-  }]
+  }],
+  lastScrapedSubmissionId: String
 });
 
 const User = mongoose.model('User', userSchema);
