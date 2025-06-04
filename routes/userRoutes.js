@@ -209,4 +209,38 @@ router.get('/:username/checkpoint', async (req, res) => {
   }
 });
 
+router.delete("/:username/remove-friend", async (req, res) => {
+  try {
+    console.log('=== REMOVE FRIEND ENDPOINT ===');
+    console.log('Username:', req.params.username);
+    console.log('Friend username from request:', req.body.friendUsername);
+    
+    const { friendUsername } = req.body;
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const friend = await User.findOne({ username: friendUsername });
+    if (!friend) return res.status(404).json({ message: "Friend not found" });
+    
+    console.log('Friend found:', friend ? 'Yes' : 'No');
+
+    // Check if they are actually friends
+    const friendIndex = user.friends.findIndex(fid => fid.toString() === friend._id.toString());
+    if (friendIndex === -1) {
+      return res.status(400).json({ message: "Friend not found in your friends list" });
+    }
+
+    // Remove friend from user's friends array
+    user.friends.splice(friendIndex, 1);
+    await user.save();
+    console.log('Friend removed successfully');
+
+    res.json({ message: `${friendUsername} has been removed from your friends list` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
 module.exports = router;
