@@ -1,26 +1,34 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
   },
-  friends: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  solvedProblems: [{
-    problem: String,  // Problem slug/name
-    submissionId: String,  // Latest submission ID
-    status: {
-      type: String,
-      default: "Accepted"  // Default value, typically all solved problems are "Accepted"
-    }
-  }],
-  lastScrapedSubmissionId: String
+  avatar: {
+    type: String,
+    default: "https://secure.gravatar.com/avatar?d=mp",
+  },
+  friends: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
+  solvedProblems: [
+    {
+      problem: String,
+      submissionId: String,
+      status: {
+        type: String,
+        default: "Accepted",
+      },
+    },
+  ],
+  lastScrapedSubmissionId: String,
 });
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model("User", userSchema);
 
 module.exports = User;
