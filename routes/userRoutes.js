@@ -9,7 +9,17 @@ router.get("/:username", async (req, res) => {
   if (!user) {
     return res.status(404).json({ message: "User not found" });
   }
-  return res.status(200).json({ message: "User exists" });
+
+  return res.status(200).json({
+    message: "User exists",
+    user: {
+      username: user.username,
+      avatar: user.avatar,
+      solvedProblems: user.solvedProblems,
+      solvedCount: user.solvedProblems ? user.solvedProblems.length : 0,
+      friendsCount: user.friends ? user.friends.length : 0,
+    },
+  });
 });
 
 router.post("/register", async (req, res) => {
@@ -33,17 +43,46 @@ router.post("/register", async (req, res) => {
 router.get("/:username/solved/:slug", async (req, res) => {
   const { username, slug } = req.params;
   try {
-    const user = await User.findOne({ username }).populate("friends");
+    const user = await User.findOne({ username }).populate({
+      path: "friends",
+      select: "username solvedProblems avatar",
+    });
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-
-    const friendsSolved = user.friends.filter((friend) =>
-      friend.solvedProblems.some(
-        (solvedProblem) => solvedProblem.problem === slug
-      )
+    console.log(
+      `Looking for slug "${slug}" among ${user.friends.length} friends`
     );
-    res.json(friendsSolved.map((friend) => friend.username));
+
+    const friendsSolved = user.friends.filter((friend) => {
+      return (
+        friend.solvedProblems &&
+        Array.isArray(friend.solvedProblems) &&
+        friend.solvedProblems.some(
+          (solvedProblem) => solvedProblem.problem === slug
+        )
+      );
+    });
+
+    const detailedResponse = friendsSolved.map((friend) => {
+      const solvedProblemEntry = friend.solvedProblems.find(
+        (sp) => sp.problem === slug
+      );
+
+      return {
+        username: friend.username,
+        avatar: friend.avatar,
+        submission: {
+          problem: slug,
+          status: solvedProblemEntry.status || "Accepted",
+          submissionId: solvedProblemEntry.submissionId || null,
+        },
+      };
+    });
+
+    console.log(`Found ${friendsSolved.length} friends who solved the problem`);
+    res.json(detailedResponse);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -79,14 +118,32 @@ router.post("/:username/add-friend", async (req, res) => {
 
 router.get("/:username/friends", async (req, res) => {
   try {
+    // Add logging to help debug
+    console.log(`Getting friends for user: ${req.params.username}`);
+
     const user = await User.findOne({ username: req.params.username }).populate(
-      "friends",
-      "username solvedProblems avatar"
+      {
+        path: "friends",
+        select: "username avatar solvedProblems",
+        // Using object syntax for populate with select ensures all nested fields are included
+      }
     );
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    // Log the first friend's data to verify it includes solved problems
+    if (user.friends && user.friends.length > 0) {
+      console.log(
+        `First friend has ${
+          user.friends[0].solvedProblems
+            ? user.friends[0].solvedProblems.length
+            : 0
+        } solved problems`
+      );
+    }
+
     res.json({ friends: user.friends });
   } catch (error) {
     console.error(error);
@@ -254,6 +311,36 @@ router.delete("/:username/remove-friend", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.get("/:username/solved", async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    // Find the user and select only the fields we need
+    const user = await User.findOne({ username }).select(
+      "username solvedProblems avatar"
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log(
+      `Returning ${
+        user.solvedProblems ? user.solvedProblems.length : 0
+      } solved problems for ${username}`
+    );
+
+    res.status(200).json({
+      username: user.username,
+      avatar: user.avatar,
+      solvedProblems: user.solvedProblems || [],
+    });
+  } catch (error) {
+    console.error("Error fetching solved problems:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
